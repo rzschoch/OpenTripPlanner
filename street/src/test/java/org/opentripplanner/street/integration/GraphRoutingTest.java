@@ -31,7 +31,6 @@ import org.opentripplanner.street.model.edge.StreetTransitEntranceLink;
 import org.opentripplanner.street.model.edge.StreetTransitStopLink;
 import org.opentripplanner.street.model.edge.StreetVehicleParkingLink;
 import org.opentripplanner.street.model.edge.TemporaryFreeEdge;
-import org.opentripplanner.street.model.edge.VehicleParkingEdge;
 import org.opentripplanner.street.model.vertex.ElevatorHopVertex;
 import org.opentripplanner.street.model.vertex.IntersectionVertex;
 import org.opentripplanner.street.model.vertex.LabelledIntersectionVertex;
@@ -43,6 +42,7 @@ import org.opentripplanner.street.model.vertex.TransitStopVertex;
 import org.opentripplanner.street.model.vertex.VehicleParkingEntranceVertex;
 import org.opentripplanner.street.model.vertex.Vertex;
 import org.opentripplanner.street.model.vertex.VertexLabel;
+import org.opentripplanner.streetadapter.VehicleParkingHelper;
 
 /**
  * Street-module version of GraphRoutingTest, stripped of all application/transit module
@@ -381,7 +381,7 @@ public abstract class GraphRoutingTest {
         .map(entrance -> addToGraph(new VehicleParkingEntranceVertex(entrance)))
         .toList();
 
-      linkVehicleParkingEntrances(vertices);
+      VehicleParkingHelper.linkVehicleParkingEntrances(vertices);
       vertices.forEach(v -> biLink(v.getParkingEntrance().getVertex(), v));
       return vehicleParking;
     }
@@ -415,42 +415,6 @@ public abstract class GraphRoutingTest {
       VehicleParkingEntranceVertex to
     ) {
       return List.of(link(from, to), link(to, from));
-    }
-
-    // -- Vehicle parking entrance linking (inlined from VehicleParkingHelper)
-    private static void linkVehicleParkingEntrances(
-      List<VehicleParkingEntranceVertex> vehicleParkingVertices
-    ) {
-      for (int i = 0; i < vehicleParkingVertices.size(); i++) {
-        var currentVertex = vehicleParkingVertices.get(i);
-        if (isUsableForParking(currentVertex, currentVertex)) {
-          VehicleParkingEdge.createVehicleParkingEdge(currentVertex);
-        }
-        for (int j = i + 1; j < vehicleParkingVertices.size(); j++) {
-          var nextVertex = vehicleParkingVertices.get(j);
-          if (isUsableForParking(currentVertex, nextVertex)) {
-            VehicleParkingEdge.createVehicleParkingEdge(currentVertex, nextVertex);
-            VehicleParkingEdge.createVehicleParkingEdge(nextVertex, currentVertex);
-          }
-        }
-      }
-    }
-
-    private static boolean isUsableForParking(
-      VehicleParkingEntranceVertex from,
-      VehicleParkingEntranceVertex to
-    ) {
-      var usableForBikeParking =
-        from.getVehicleParking().hasBicyclePlaces() &&
-        from.isWalkAccessible() &&
-        to.isWalkAccessible();
-
-      var usableForCarParking =
-        from.getVehicleParking().hasAnyCarPlaces() &&
-        ((from.isCarAccessible() && to.isWalkAccessible()) ||
-          (from.isWalkAccessible() && to.isCarAccessible()));
-
-      return usableForBikeParking || usableForCarParking;
     }
   }
 }
