@@ -7,12 +7,12 @@ import org.junit.jupiter.api.Test;
 import org.opentripplanner.astar.model.GraphPath;
 import org.opentripplanner.astar.model.ShortestPathTree;
 import org.opentripplanner.osm.DefaultOsmProvider;
-import org.opentripplanner.street.search.request.StreetSearchRequest;
 import org.opentripplanner.street.graph.Graph;
 import org.opentripplanner.street.model.StreetMode;
 import org.opentripplanner.street.model.edge.Edge;
 import org.opentripplanner.street.model.vertex.Vertex;
 import org.opentripplanner.street.model.vertex.VertexLabel;
+import org.opentripplanner.street.search.request.StreetSearchRequest;
 import org.opentripplanner.street.search.state.State;
 import org.opentripplanner.streetadapter.EuclideanRemainingWeightHeuristic;
 import org.opentripplanner.streetadapter.StreetSearchBuilder;
@@ -51,9 +51,7 @@ class UnroutableTest {
    */
   @Test
   public void testOnBoardRouting() {
-    var streetSearchRequest = StreetSearchRequest.of()
-      .withMode(StreetMode.BIKE)
-      .build();
+    var streetSearchRequest = StreetSearchRequest.of().withMode(StreetMode.BIKE).build();
 
     Vertex from = graph.getVertex(VertexLabel.osm(2003617278));
     Vertex to = graph.getVertex(VertexLabel.osm(40446276));

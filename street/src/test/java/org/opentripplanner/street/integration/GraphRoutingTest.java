@@ -1,0 +1,456 @@
+package org.opentripplanner.street.integration;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import org.locationtech.jts.geom.Coordinate;
+import org.opentripplanner.core.model.accessibility.Accessibility;
+import org.opentripplanner.core.model.i18n.I18NString;
+import org.opentripplanner.core.model.i18n.NonLocalizedString;
+import org.opentripplanner.core.model.id.FeedScopedId;
+import org.opentripplanner.service.vehicleparking.model.VehicleParking;
+import org.opentripplanner.service.vehicleparking.model.VehicleParking.VehicleParkingEntranceCreator;
+import org.opentripplanner.service.vehiclerental.model.RentalVehicleType;
+import org.opentripplanner.service.vehiclerental.model.VehicleRentalPlace;
+import org.opentripplanner.service.vehiclerental.model.VehicleRentalStation;
+import org.opentripplanner.service.vehiclerental.street.StreetVehicleRentalLink;
+import org.opentripplanner.service.vehiclerental.street.VehicleRentalEdge;
+import org.opentripplanner.service.vehiclerental.street.VehicleRentalPlaceVertex;
+import org.opentripplanner.street.geometry.GeometryUtils;
+import org.opentripplanner.street.geometry.WgsCoordinate;
+import org.opentripplanner.street.graph.Graph;
+import org.opentripplanner.street.model.StreetTraversalPermission;
+import org.opentripplanner.street.model.edge.ElevatorAlightEdge;
+import org.opentripplanner.street.model.edge.ElevatorBoardEdge;
+import org.opentripplanner.street.model.edge.ElevatorEdge;
+import org.opentripplanner.street.model.edge.ElevatorHopEdge;
+import org.opentripplanner.street.model.edge.PathwayEdge;
+import org.opentripplanner.street.model.edge.StreetEdge;
+import org.opentripplanner.street.model.edge.StreetEdgeBuilder;
+import org.opentripplanner.street.model.edge.StreetTransitEntranceLink;
+import org.opentripplanner.street.model.edge.StreetTransitStopLink;
+import org.opentripplanner.street.model.edge.StreetVehicleParkingLink;
+import org.opentripplanner.street.model.edge.TemporaryFreeEdge;
+import org.opentripplanner.street.model.edge.VehicleParkingEdge;
+import org.opentripplanner.street.model.vertex.ElevatorHopVertex;
+import org.opentripplanner.street.model.vertex.IntersectionVertex;
+import org.opentripplanner.street.model.vertex.LabelledIntersectionVertex;
+import org.opentripplanner.street.model.vertex.StreetVertex;
+import org.opentripplanner.street.model.vertex.TemporaryStreetLocation;
+import org.opentripplanner.street.model.vertex.TemporaryVertex;
+import org.opentripplanner.street.model.vertex.TransitEntranceVertex;
+import org.opentripplanner.street.model.vertex.TransitStopVertex;
+import org.opentripplanner.street.model.vertex.VehicleParkingEntranceVertex;
+import org.opentripplanner.street.model.vertex.Vertex;
+import org.opentripplanner.street.model.vertex.VertexLabel;
+
+/**
+ * Street-module version of GraphRoutingTest, stripped of all application/transit module
+ * dependencies. This base class provides a graph builder DSL for street integration tests.
+ */
+public abstract class GraphRoutingTest {
+
+  public static final String TEST_VEHICLE_RENTAL_NETWORK = "test network";
+
+  protected Graph modelOf(Builder builder) {
+    builder.build();
+    Graph graph = builder.graph();
+    graph.index();
+    return graph;
+  }
+
+  public abstract static class Builder {
+
+    private final Graph graph;
+
+    protected Builder() {
+      graph = new Graph();
+    }
+
+    public abstract void build();
+
+    public Graph graph() {
+      return graph;
+    }
+
+    public <T extends Vertex> T v(VertexLabel label) {
+      return vertex(label);
+    }
+
+    public <T extends Vertex> T vertex(VertexLabel label) {
+      return (T) graph.getVertex(label);
+    }
+
+    // -- Utility: add vertex to graph
+    private <T extends Vertex> T addToGraph(T vertex) {
+      graph.addVertex(vertex);
+      return vertex;
+    }
+
+    // -- Street network
+    public IntersectionVertex intersection(String label, double latitude, double longitude) {
+      return addToGraph(
+        new LabelledIntersectionVertex(label, longitude, latitude, false, false)
+      );
+    }
+
+    public IntersectionVertex intersection(String label, WgsCoordinate coordinate) {
+      return intersection(label, coordinate.latitude(), coordinate.longitude());
+    }
+
+    public StreetEdgeBuilder<?> streetBuilder(
+      StreetVertex from,
+      StreetVertex to,
+      int length,
+      StreetTraversalPermission permissions
+    ) {
+      return new StreetEdgeBuilder<>()
+        .withFromVertex(from)
+        .withToVertex(to)
+        .withGeometry(
+          GeometryUtils.makeLineString(from.getLat(), from.getLon(), to.getLat(), to.getLon())
+        )
+        .withName(String.format("%s%s street", from.getLabel(), to.getLabel()))
+        .withMeterLength(length)
+        .withPermission(permissions)
+        .withBack(false);
+    }
+
+    /**
+     * Create a street with all permissions in both directions
+     */
+    public List<StreetEdge> biStreet(StreetVertex from, StreetVertex to, int length) {
+      return street(from, to, length, StreetTraversalPermission.ALL, StreetTraversalPermission.ALL);
+    }
+
+    public StreetEdge street(
+      StreetVertex from,
+      StreetVertex to,
+      int length,
+      StreetTraversalPermission permissions
+    ) {
+      return streetBuilder(from, to, length, permissions).buildAndConnect();
+    }
+
+    public StreetEdge street(
+      StreetVertex from,
+      StreetVertex to,
+      int length,
+      StreetTraversalPermission permissions,
+      float carSpeed
+    ) {
+      return streetBuilder(from, to, length, permissions).withCarSpeed(carSpeed).buildAndConnect();
+    }
+
+    public List<StreetEdge> street(
+      StreetVertex from,
+      StreetVertex to,
+      int length,
+      StreetTraversalPermission forwardPermissions,
+      StreetTraversalPermission reversePermissions
+    ) {
+      return List.of(
+        new StreetEdgeBuilder<>()
+          .withFromVertex(from)
+          .withToVertex(to)
+          .withGeometry(
+            GeometryUtils.makeLineString(from.getLat(), from.getLon(), to.getLat(), to.getLon())
+          )
+          .withName(String.format("%s%s street", from.getDefaultName(), to.getDefaultName()))
+          .withMeterLength(length)
+          .withPermission(forwardPermissions)
+          .withBack(false)
+          .buildAndConnect(),
+        new StreetEdgeBuilder<>()
+          .withFromVertex(to)
+          .withToVertex(from)
+          .withGeometry(
+            GeometryUtils.makeLineString(to.getLat(), to.getLon(), from.getLat(), from.getLon())
+          )
+          .withName(String.format("%s%s street", from.getDefaultName(), to.getDefaultName()))
+          .withMeterLength(length)
+          .withPermission(reversePermissions)
+          .withBack(true)
+          .buildAndConnect()
+      );
+    }
+
+    public List<ElevatorEdge> elevator(StreetTraversalPermission permission, Vertex... vertices) {
+      List<ElevatorEdge> edges = new ArrayList<>();
+      List<ElevatorHopVertex> onboardVertices = new ArrayList<>();
+
+      for (int i = 0; i < vertices.length; i++) {
+        Vertex v = vertices[i];
+
+        var onboard = addToGraph(new ElevatorHopVertex(v, v.getLabelString() + "_" + i));
+
+        edges.add(ElevatorBoardEdge.createElevatorBoardEdge(v, onboard));
+        edges.add(ElevatorAlightEdge.createElevatorAlightEdge(onboard, v));
+
+        onboardVertices.add(onboard);
+      }
+
+      for (int i = 1; i < onboardVertices.size(); i++) {
+        var from = onboardVertices.get(i - 1);
+        var to = onboardVertices.get(i);
+
+        edges.add(
+          ElevatorHopEdge.createElevatorHopEdge(from, to, permission, Accessibility.POSSIBLE)
+        );
+        edges.add(
+          ElevatorHopEdge.createElevatorHopEdge(to, from, permission, Accessibility.POSSIBLE)
+        );
+      }
+
+      return edges;
+    }
+
+    // -- Transit stop / entrance vertices (without transit model dependency)
+
+    public TransitStopVertex stop(String id, double latitude, double longitude) {
+      var vertex = TransitStopVertex.of()
+        .withId(new FeedScopedId("test", id))
+        .withPoint(
+          GeometryUtils.getGeometryFactory().createPoint(new Coordinate(longitude, latitude))
+        )
+        .build();
+      return addToGraph(vertex);
+    }
+
+    public TransitStopVertex stop(String id, WgsCoordinate coordinate) {
+      return stop(id, coordinate.latitude(), coordinate.longitude());
+    }
+
+    public TransitEntranceVertex entrance(String id, double latitude, double longitude) {
+      return new TransitEntranceVertex(
+        new FeedScopedId("test", id),
+        new WgsCoordinate(latitude, longitude),
+        I18NString.of(id),
+        Accessibility.NO_INFORMATION
+      );
+    }
+
+    // -- Pathway
+    public PathwayEdge pathway(Vertex from, Vertex to, int time, int length) {
+      return PathwayEdge.createPathwayEdge(
+        from,
+        to,
+        new NonLocalizedString(
+          String.format("%s%s pathway", from.getDefaultName(), to.getDefaultName())
+        ),
+        time,
+        length,
+        0,
+        0,
+        false
+      );
+    }
+
+    // -- Transit linking
+    public StreetTransitEntranceLink link(StreetVertex from, TransitEntranceVertex to) {
+      return StreetTransitEntranceLink.createStreetTransitEntranceLink(from, to);
+    }
+
+    public StreetTransitEntranceLink link(TransitEntranceVertex from, StreetVertex to) {
+      return StreetTransitEntranceLink.createStreetTransitEntranceLink(from, to);
+    }
+
+    public List<StreetTransitEntranceLink> biLink(StreetVertex from, TransitEntranceVertex to) {
+      return List.of(link(from, to), link(to, from));
+    }
+
+    public StreetTransitStopLink link(StreetVertex from, TransitStopVertex to) {
+      return StreetTransitStopLink.createStreetTransitStopLink(from, to);
+    }
+
+    public StreetTransitStopLink link(TransitStopVertex from, StreetVertex to) {
+      return StreetTransitStopLink.createStreetTransitStopLink(from, to);
+    }
+
+    public List<StreetTransitStopLink> biLink(StreetVertex from, TransitStopVertex to) {
+      return List.of(link(from, to), link(to, from));
+    }
+
+    // -- Street linking (temporary)
+    public TemporaryStreetLocation streetLocation(String name, double latitude, double longitude) {
+      var nearestPoint = new Coordinate(longitude, latitude);
+      return new TemporaryStreetLocation(nearestPoint, new NonLocalizedString(name));
+    }
+
+    public TemporaryFreeEdge link(TemporaryVertex from, StreetVertex to) {
+      return TemporaryFreeEdge.createTemporaryFreeEdge(from, to);
+    }
+
+    public TemporaryFreeEdge link(StreetVertex from, TemporaryVertex to) {
+      return TemporaryFreeEdge.createTemporaryFreeEdge(from, to);
+    }
+
+    // -- Vehicle rental
+    public VehicleRentalPlace vehicleRentalStationEntity(
+      String id,
+      double latitude,
+      double longitude,
+      String network
+    ) {
+      final RentalVehicleType vehicleType = RentalVehicleType.getDefaultType(network);
+      return VehicleRentalStation.of()
+        .withId(new FeedScopedId(network, id))
+        .withName(new NonLocalizedString(id))
+        .withLongitude(longitude)
+        .withLatitude(latitude)
+        .withVehiclesAvailable(2)
+        .withSpacesAvailable(2)
+        .withVehicleTypesAvailable(Map.of(vehicleType, 2))
+        .withVehicleSpacesAvailable(Map.of(vehicleType, 2))
+        .withIsArrivingInRentalVehicleAtDestinationAllowed(false)
+        .build();
+    }
+
+    public VehicleRentalPlaceVertex vehicleRentalStation(
+      String id,
+      double latitude,
+      double longitude,
+      String network
+    ) {
+      var vertex = new VehicleRentalPlaceVertex(
+        vehicleRentalStationEntity(id, latitude, longitude, network)
+      );
+      VehicleRentalEdge.createVehicleRentalEdge(
+        vertex,
+        RentalVehicleType.getDefaultType(network).formFactor()
+      );
+      return vertex;
+    }
+
+    public VehicleRentalPlaceVertex vehicleRentalStation(
+      String id,
+      double latitude,
+      double longitude
+    ) {
+      return vehicleRentalStation(id, latitude, longitude, TEST_VEHICLE_RENTAL_NETWORK);
+    }
+
+    public StreetVehicleRentalLink link(StreetVertex from, VehicleRentalPlaceVertex to) {
+      return StreetVehicleRentalLink.createStreetVehicleRentalLink(from, to);
+    }
+
+    public StreetVehicleRentalLink link(VehicleRentalPlaceVertex from, StreetVertex to) {
+      return StreetVehicleRentalLink.createStreetVehicleRentalLink(from, to);
+    }
+
+    public List<StreetVehicleRentalLink> biLink(StreetVertex from, VehicleRentalPlaceVertex to) {
+      return List.of(link(from, to), link(to, from));
+    }
+
+    // -- Vehicle parking
+    public VehicleParking vehicleParking(
+      String id,
+      double x,
+      double y,
+      boolean bicyclePlaces,
+      boolean carPlaces,
+      List<VehicleParkingEntranceCreator> entrances,
+      String... tags
+    ) {
+      return vehicleParking(id, x, y, bicyclePlaces, carPlaces, false, entrances, tags);
+    }
+
+    public VehicleParking vehicleParking(
+      String id,
+      double x,
+      double y,
+      boolean bicyclePlaces,
+      boolean carPlaces,
+      boolean wheelchairAccessibleCarPlaces,
+      List<VehicleParkingEntranceCreator> entrances,
+      String... tags
+    ) {
+      var vehicleParking = VehicleParking.builder()
+        .id(new FeedScopedId("test", id))
+        .coordinate(new WgsCoordinate(y, x))
+        .bicyclePlaces(bicyclePlaces)
+        .carPlaces(carPlaces)
+        .entrances(entrances)
+        .wheelchairAccessibleCarPlaces(wheelchairAccessibleCarPlaces)
+        .tags(List.of(tags))
+        .build();
+
+      var vertices = vehicleParking
+        .getEntrances()
+        .stream()
+        .map(entrance -> addToGraph(new VehicleParkingEntranceVertex(entrance)))
+        .toList();
+
+      linkVehicleParkingEntrances(vertices);
+      vertices.forEach(v -> biLink(v.getParkingEntrance().getVertex(), v));
+      return vehicleParking;
+    }
+
+    public VehicleParking.VehicleParkingEntranceCreator vehicleParkingEntrance(
+      StreetVertex streetVertex,
+      String id,
+      boolean carAccessible,
+      boolean walkAccessible
+    ) {
+      return builder ->
+        builder
+          .entranceId(new FeedScopedId("test", id))
+          .name(new NonLocalizedString(id))
+          .coordinate(new WgsCoordinate(streetVertex.getCoordinate()))
+          .vertex(streetVertex)
+          .carAccessible(carAccessible)
+          .walkAccessible(walkAccessible);
+    }
+
+    public StreetVehicleParkingLink link(StreetVertex from, VehicleParkingEntranceVertex to) {
+      return StreetVehicleParkingLink.createStreetVehicleParkingLink(from, to);
+    }
+
+    public StreetVehicleParkingLink link(VehicleParkingEntranceVertex from, StreetVertex to) {
+      return StreetVehicleParkingLink.createStreetVehicleParkingLink(from, to);
+    }
+
+    public List<StreetVehicleParkingLink> biLink(
+      StreetVertex from,
+      VehicleParkingEntranceVertex to
+    ) {
+      return List.of(link(from, to), link(to, from));
+    }
+
+    // -- Vehicle parking entrance linking (inlined from VehicleParkingHelper)
+    private static void linkVehicleParkingEntrances(
+      List<VehicleParkingEntranceVertex> vehicleParkingVertices
+    ) {
+      for (int i = 0; i < vehicleParkingVertices.size(); i++) {
+        var currentVertex = vehicleParkingVertices.get(i);
+        if (isUsableForParking(currentVertex, currentVertex)) {
+          VehicleParkingEdge.createVehicleParkingEdge(currentVertex);
+        }
+        for (int j = i + 1; j < vehicleParkingVertices.size(); j++) {
+          var nextVertex = vehicleParkingVertices.get(j);
+          if (isUsableForParking(currentVertex, nextVertex)) {
+            VehicleParkingEdge.createVehicleParkingEdge(currentVertex, nextVertex);
+            VehicleParkingEdge.createVehicleParkingEdge(nextVertex, currentVertex);
+          }
+        }
+      }
+    }
+
+    private static boolean isUsableForParking(
+      VehicleParkingEntranceVertex from,
+      VehicleParkingEntranceVertex to
+    ) {
+      var usableForBikeParking =
+        from.getVehicleParking().hasBicyclePlaces() &&
+        from.isWalkAccessible() &&
+        to.isWalkAccessible();
+
+      var usableForCarParking =
+        from.getVehicleParking().hasAnyCarPlaces() &&
+        ((from.isCarAccessible() && to.isWalkAccessible()) ||
+          (from.isWalkAccessible() && to.isCarAccessible()));
+
+      return usableForBikeParking || usableForCarParking;
+    }
+  }
+}

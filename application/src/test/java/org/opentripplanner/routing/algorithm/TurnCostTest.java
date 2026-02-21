@@ -12,7 +12,6 @@ import org.locationtech.jts.geom.LineString;
 import org.opentripplanner.astar.model.GraphPath;
 import org.opentripplanner.astar.model.ShortestPathTree;
 import org.opentripplanner.graph_builder.module.TurnRestrictionModule;
-import org.opentripplanner.street.search.request.StreetSearchRequest;
 import org.opentripplanner.service.osminfo.OsmInfoGraphBuildRepository;
 import org.opentripplanner.service.osminfo.internal.DefaultOsmInfoGraphBuildRepository;
 import org.opentripplanner.street.geometry.GeometryUtils;
@@ -31,6 +30,7 @@ import org.opentripplanner.street.search.TraverseMode;
 import org.opentripplanner.street.search.TraverseModeSet;
 import org.opentripplanner.street.search.intersection_model.ConstantIntersectionTraversalCalculator;
 import org.opentripplanner.street.search.intersection_model.IntersectionTraversalCalculator;
+import org.opentripplanner.street.search.request.StreetSearchRequest;
 import org.opentripplanner.street.search.state.State;
 import org.opentripplanner.streetadapter.EuclideanRemainingWeightHeuristic;
 import org.opentripplanner.streetadapter.StreetSearchBuilder;
@@ -217,9 +217,7 @@ public class TurnCostTest {
     Vertex to,
     int expectedDuration
   ) {
-    var streetSearchRequest = StreetSearchRequest.copyOf(request)
-      .withMode(streetMode)
-      .build();
+    var streetSearchRequest = StreetSearchRequest.copyOf(request).withMode(streetMode).build();
     ShortestPathTree<State, Edge, Vertex> tree = StreetSearchBuilder.of()
       .withHeuristic(new EuclideanRemainingWeightHeuristic())
       .withRequest(streetSearchRequest)

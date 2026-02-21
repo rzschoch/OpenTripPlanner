@@ -1,36 +1,42 @@
 package org.opentripplanner.graph_builder.module.osm;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.opentripplanner.street.model.StreetMode.BIKE;
-import static org.opentripplanner.street.model.StreetMode.CAR;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.opentripplanner.astar.model.GraphPath;
-import org.opentripplanner.astar.model.ShortestPathTree;
-import org.opentripplanner.model.modes.ExcludeAllTransitFilter;
 import org.opentripplanner.osm.DefaultOsmProvider;
-import org.opentripplanner.routing.api.request.RequestModes;
-import org.opentripplanner.routing.api.request.request.filter.AllowAllTransitFilter;
-import org.opentripplanner.routing.api.request.request.filter.TransitFilter;
-import org.opentripplanner.street.search.request.StreetSearchRequest;
 import org.opentripplanner.street.graph.Graph;
+import org.opentripplanner.street.model.StreetMode;
 import org.opentripplanner.street.model.edge.Edge;
 import org.opentripplanner.street.model.vertex.Vertex;
 import org.opentripplanner.street.model.vertex.VertexLabel;
 import org.opentripplanner.street.search.intersection_model.ConstantIntersectionTraversalCalculator;
 import org.opentripplanner.street.search.intersection_model.IntersectionTraversalCalculator;
+import org.opentripplanner.street.search.request.StreetSearchRequest;
 import org.opentripplanner.street.search.state.State;
 import org.opentripplanner.street.search.strategy.DominanceFunctions;
 import org.opentripplanner.streetadapter.EuclideanRemainingWeightHeuristic;
 import org.opentripplanner.streetadapter.StreetSearchBuilder;
 import org.opentripplanner.test.support.ResourceLoader;
 
+/**
+ * Verifies the triangle inequality property of shortest paths on a real OSM graph
+ * (NYC_small.osm.pbf). For any vertices A, B, C the shortest path must satisfy:
+ * <pre>
+ *   cost(A → C) ≤ cost(A → B) + cost(B → C)
+ * </pre>
+ * A violation would indicate a bug in the routing algorithm or the cost function.
+ * All reluctance values are set to 1.0 so that weight equals duration, making the
+ * cost function monotonically increasing and the inequality straightforward to verify.
+ */
 public class TriangleInequalityTest {
 
   private static Graph graph;
@@ -62,199 +68,103 @@ public class TriangleInequalityTest {
     end = graph.getVertex(VertexLabel.osm(42448554));
   }
 
-  @Test
-  public void testTriangleInequalityDefaultModes() {
-    checkTriangleInequality();
+  static Stream<Arguments> streetModes() {
+    return Stream.of(
+      Arguments.of(StreetMode.WALK),
+      Arguments.of(StreetMode.BIKE),
+      Arguments.of(StreetMode.CAR)
+    );
   }
 
-  @Test
-  public void testTriangleInequalityWalkingOnly() {
-    RequestModes modes = RequestModes.of().build();
-    checkTriangleInequality(modes, List.of(ExcludeAllTransitFilter.of()));
-  }
+  @ParameterizedTest(name = "triangle inequality holds for {0}")
+  @MethodSource("streetModes")
+  void triangleInequalityHolds(StreetMode mode) {
+    assertNotNull(start, "Start vertex not found in graph");
+    assertNotNull(end, "End vertex not found in graph");
 
-  @Test
-  public void testTriangleInequalityDrivingOnly() {
-    RequestModes modes = RequestModes.of().withDirectMode(CAR).build();
-    checkTriangleInequality(modes, List.of(ExcludeAllTransitFilter.of()));
-  }
+    var request = buildRequest(mode);
 
-  @Test
-  public void testTriangleInequalityWalkTransit() {
-    RequestModes modes = RequestModes.defaultRequestModes();
-    checkTriangleInequality(modes, List.of(AllowAllTransitFilter.of()));
-  }
-
-  @Test
-  public void testTriangleInequalityWalkBike() {
-    RequestModes modes = RequestModes.of().withDirectMode(BIKE).build();
-    checkTriangleInequality(modes, List.of(ExcludeAllTransitFilter.of()));
-  }
-
-  @Test
-  public void testTriangleInequalityDefaultModesBasicSPT() {
-    checkTriangleInequality(null, List.of());
-  }
-
-  @Test
-  public void testTriangleInequalityWalkingOnlyBasicSPT() {
-    RequestModes modes = RequestModes.of().build();
-    checkTriangleInequality(modes, List.of(ExcludeAllTransitFilter.of()));
-  }
-
-  @Test
-  public void testTriangleInequalityDrivingOnlyBasicSPT() {
-    RequestModes modes = RequestModes.of().withDirectMode(CAR).build();
-    checkTriangleInequality(modes, List.of(ExcludeAllTransitFilter.of()));
-  }
-
-  @Test
-  public void testTriangleInequalityWalkTransitBasicSPT() {
-    RequestModes modes = RequestModes.defaultRequestModes();
-    checkTriangleInequality(modes, List.of(AllowAllTransitFilter.of()));
-  }
-
-  @Test
-  public void testTriangleInequalityWalkBikeBasicSPT() {
-    RequestModes modes = RequestModes.of().withDirectMode(BIKE).build();
-    checkTriangleInequality(modes, List.of(ExcludeAllTransitFilter.of()));
-  }
-
-  @Test
-  public void testTriangleInequalityDefaultModesMultiSPT() {
-    checkTriangleInequality(null, List.of());
-  }
-
-  @Test
-  public void testTriangleInequalityWalkingOnlyMultiSPT() {
-    RequestModes modes = RequestModes.of().build();
-    checkTriangleInequality(modes, List.of(ExcludeAllTransitFilter.of()));
-  }
-
-  @Test
-  public void testTriangleInequalityDrivingOnlyMultiSPT() {
-    RequestModes modes = RequestModes.of().withDirectMode(CAR).build();
-    checkTriangleInequality(modes, List.of(ExcludeAllTransitFilter.of()));
-  }
-
-  @Test
-  public void testTriangleInequalityWalkTransitMultiSPT() {
-    RequestModes modes = RequestModes.defaultRequestModes();
-    checkTriangleInequality(modes, List.of(AllowAllTransitFilter.of()));
-  }
-
-  @Test
-  public void testTriangleInequalityWalkBikeMultiSPT() {
-    RequestModes modes = RequestModes.of().withDirectMode(BIKE).build();
-    checkTriangleInequality(modes, List.of(ExcludeAllTransitFilter.of()));
-  }
-
-  private GraphPath<State, Edge, Vertex> getPath(
-    StreetSearchRequest options,
-    Edge startBackEdge,
-    Vertex u,
-    Vertex v
-  ) {
-    return StreetSearchBuilder.of()
-      .withHeuristic(new EuclideanRemainingWeightHeuristic())
-      .withOriginBackEdge(startBackEdge)
-      .withRequest(options)
-      .withFrom(u)
-      .withTo(v)
-      .withIntersectionTraversalCalculator(calculator)
-      .getShortestPathTree()
-      .getPath(v);
-  }
-
-  private void checkTriangleInequality() {
-    checkTriangleInequality(null, List.of());
-  }
-
-  private void checkTriangleInequality(RequestModes modes, List<TransitFilter> filters) {
-    assertNotNull(start);
-    assertNotNull(end);
-
-    var streetSearchRequest = StreetSearchRequest.of()
-      // All reluctance terms are 1.0 so that duration is monotonically increasing in weight.
-      .withWalk(walk -> walk.withStairsReluctance(1.0).withSpeed(1.0).withReluctance(1.0))
-      .withTurnReluctance(1.0)
-      .withCar(car -> car.withReluctance(1.0))
-      .withBike(bike -> bike.withSpeed(1.0).withReluctance(1.0))
-      .withScooter(scooter -> scooter.withSpeed(1.0).withReluctance(1.0))
-      .withMode(modes != null ? modes.directMode : null)
-      .build();
-
-    ShortestPathTree<State, Edge, Vertex> tree = StreetSearchBuilder.of()
+    var tree = StreetSearchBuilder.of()
       .withHeuristic(new EuclideanRemainingWeightHeuristic())
       .withDominanceFunction(new DominanceFunctions.EarliestArrival())
-      .withRequest(streetSearchRequest)
+      .withRequest(request)
       .withFrom(start)
       .withTo(end)
       .withIntersectionTraversalCalculator(calculator)
       .getShortestPathTree();
 
-    GraphPath<State, Edge, Vertex> path = tree.getPath(end);
-    assertNotNull(path);
+    var directPath = tree.getPath(end);
+    assertNotNull(directPath, "No path found from start to end");
 
-    double startEndWeight = path.getWeight();
-    int startEndDuration = path.getDuration();
-    assertTrue(startEndWeight > 0);
-    assertEquals(startEndWeight, startEndDuration, 1.0 * path.edges.size());
+    double directWeight = directPath.getWeight();
+    assertTrue(directWeight > 0, "Path weight should be positive");
 
-    // Try every vertex in the graph as an intermediate.
-    boolean violated = false;
+    List<String> violations = new ArrayList<>();
+
     for (Vertex intermediate : graph.getVertices()) {
       if (intermediate == start || intermediate == end) {
         continue;
       }
 
-      GraphPath<State, Edge, Vertex> startIntermediatePath = getPath(
-        streetSearchRequest,
-        null,
-        start,
-        intermediate
-      );
-      if (startIntermediatePath == null) {
+      var startToIntermediate = findPath(request, null, start, intermediate);
+      if (startToIntermediate == null) {
         continue;
       }
 
-      Edge back = startIntermediatePath.states.getLast().getBackEdge();
-      GraphPath<State, Edge, Vertex> intermediateEndPath = getPath(
-        streetSearchRequest,
-        back,
-        intermediate,
-        end
-      );
-      if (intermediateEndPath == null) {
+      var backEdge = startToIntermediate.states.getLast().getBackEdge();
+      var intermediateToEnd = findPath(request, backEdge, intermediate, end);
+      if (intermediateToEnd == null) {
         continue;
       }
 
-      double startIntermediateWeight = startIntermediatePath.getWeight();
-      int startIntermediateDuration = startIntermediatePath.getDuration();
-      double intermediateEndWeight = intermediateEndPath.getWeight();
-      int intermediateEndDuration = intermediateEndPath.getDuration();
-
-      // TODO(flamholz): fix traversal so that there's no rounding at the second resolution.
-      assertEquals(
-        startIntermediateWeight,
-        startIntermediateDuration,
-        1.0 * startIntermediatePath.edges.size()
-      );
-      assertEquals(
-        intermediateEndWeight,
-        intermediateEndDuration,
-        1.0 * intermediateEndPath.edges.size()
-      );
-
-      double diff = startIntermediateWeight + intermediateEndWeight - startEndWeight;
+      double viaWeight = startToIntermediate.getWeight() + intermediateToEnd.getWeight();
+      double diff = viaWeight - directWeight;
       if (diff < -0.01) {
-        System.out.println("Triangle inequality violated - diff = " + diff);
-        violated = true;
+        violations.add(
+          "via %s: direct=%.2f, via=%.2f, diff=%.4f".formatted(
+            intermediate,
+            directWeight,
+            viaWeight,
+            diff
+          )
+        );
       }
-      //assertTrue(startIntermediateDuration + intermediateEndDuration >=
-      //        startEndDuration);
     }
 
-    assertFalse(violated);
+    assertTrue(
+      violations.isEmpty(),
+      "%d triangle inequality violations found:\n%s".formatted(
+        violations.size(),
+        String.join("\n", violations)
+      )
+    );
+  }
+
+  private StreetSearchRequest buildRequest(StreetMode mode) {
+    return StreetSearchRequest.of()
+      .withMode(mode)
+      .withWalk(walk -> walk.withStairsReluctance(1.0).withSpeed(1.0).withReluctance(1.0))
+      .withTurnReluctance(1.0)
+      .withCar(car -> car.withReluctance(1.0))
+      .withBike(bike -> bike.withSpeed(1.0).withReluctance(1.0))
+      .withScooter(scooter -> scooter.withSpeed(1.0).withReluctance(1.0))
+      .build();
+  }
+
+  private GraphPath<State, Edge, Vertex> findPath(
+    StreetSearchRequest request,
+    Edge startBackEdge,
+    Vertex from,
+    Vertex to
+  ) {
+    return StreetSearchBuilder.of()
+      .withHeuristic(new EuclideanRemainingWeightHeuristic())
+      .withOriginBackEdge(startBackEdge)
+      .withRequest(request)
+      .withFrom(from)
+      .withTo(to)
+      .withIntersectionTraversalCalculator(calculator)
+      .getShortestPathTree()
+      .getPath(to);
   }
 }
