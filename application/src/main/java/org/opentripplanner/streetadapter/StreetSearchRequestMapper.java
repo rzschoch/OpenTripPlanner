@@ -44,6 +44,7 @@ public class StreetSearchRequestMapper {
   public static StreetSearchRequestBuilder mapInternal(RouteRequest request) {
     var time = request.dateTime() == null ? RouteRequest.normalizeNow() : request.dateTime();
     final RoutingPreferences preferences = request.preferences();
+    final var streetPreferences = preferences.street();
     var streetSearchRequestBuilder = StreetSearchRequest.of()
       .withStartTime(time)
       .withArriveBy(request.arriveBy())
@@ -51,13 +52,16 @@ public class StreetSearchRequestMapper {
       .withTo(mapGenericLocation(request.to()))
       .withWheelchairEnabled(request.journey().wheelchair())
       .withGeoidElevation(preferences.system().geoidElevation())
-      .withTurnReluctance(preferences.street().turnReluctance())
+      .withTurnReluctance(streetPreferences.turnReluctance())
+      .withRoutingTimeout(streetPreferences.routingTimeout())
+      .withIntersectionTraversalModel(streetPreferences.intersectionTraversalModel())
+      .withDrivingDirection(streetPreferences.drivingDirection())
       .withWheelchair(b -> mapWheelchair(b, request.preferences().wheelchair()))
       .withWalk(b -> mapWalk(b, preferences.walk()))
       .withBike(b -> mapBike(b, preferences.bike()))
       .withCar(b -> mapCar(b, preferences.car()))
       .withScooter(b -> mapScooter(b, preferences.scooter()))
-      .withElevator(b -> mapElevator(b, preferences.street().elevator()));
+      .withElevator(b -> mapElevator(b, streetPreferences.elevator()));
 
     var rentalDuration = request.journey().direct().rentalDuration();
     if (rentalDuration != null) {

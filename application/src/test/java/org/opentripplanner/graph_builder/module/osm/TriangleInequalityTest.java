@@ -16,9 +16,9 @@ import org.opentripplanner.astar.model.ShortestPathTree;
 import org.opentripplanner.model.modes.ExcludeAllTransitFilter;
 import org.opentripplanner.osm.DefaultOsmProvider;
 import org.opentripplanner.routing.api.request.RequestModes;
-import org.opentripplanner.routing.api.request.RouteRequest;
 import org.opentripplanner.routing.api.request.request.filter.AllowAllTransitFilter;
 import org.opentripplanner.routing.api.request.request.filter.TransitFilter;
+import org.opentripplanner.street.search.request.StreetSearchRequest;
 import org.opentripplanner.street.graph.Graph;
 import org.opentripplanner.street.model.edge.Edge;
 import org.opentripplanner.street.model.vertex.Vertex;
@@ -150,7 +150,7 @@ public class TriangleInequalityTest {
   }
 
   private GraphPath<State, Edge, Vertex> getPath(
-    RouteRequest options,
+    StreetSearchRequest options,
     Edge startBackEdge,
     Vertex u,
     Vertex v
@@ -174,30 +174,20 @@ public class TriangleInequalityTest {
     assertNotNull(start);
     assertNotNull(end);
 
-    var request = RouteRequest.of()
+    var streetSearchRequest = StreetSearchRequest.of()
       // All reluctance terms are 1.0 so that duration is monotonically increasing in weight.
-      .withPreferences(preferences ->
-        preferences
-          .withWalk(walk -> walk.withStairsReluctance(1.0).withSpeed(1.0).withReluctance(1.0))
-          .withStreet(street -> street.withTurnReluctance(1.0))
-          .withCar(car -> car.withReluctance(1.0))
-          .withBike(bike -> bike.withSpeed(1.0).withReluctance(1.0))
-          .withScooter(scooter -> scooter.withSpeed(1.0).withReluctance(1.0))
-      )
-      .withJourney(jb -> {
-        if (modes != null) {
-          jb.withModes(modes);
-        }
-        if (!filters.isEmpty()) {
-          jb.withTransit(b -> b.withFilters(filters));
-        }
-      })
-      .buildDefault();
+      .withWalk(walk -> walk.withStairsReluctance(1.0).withSpeed(1.0).withReluctance(1.0))
+      .withTurnReluctance(1.0)
+      .withCar(car -> car.withReluctance(1.0))
+      .withBike(bike -> bike.withSpeed(1.0).withReluctance(1.0))
+      .withScooter(scooter -> scooter.withSpeed(1.0).withReluctance(1.0))
+      .withMode(modes != null ? modes.directMode : null)
+      .build();
 
     ShortestPathTree<State, Edge, Vertex> tree = StreetSearchBuilder.of()
       .withHeuristic(new EuclideanRemainingWeightHeuristic())
       .withDominanceFunction(new DominanceFunctions.EarliestArrival())
-      .withRequest(request)
+      .withRequest(streetSearchRequest)
       .withFrom(start)
       .withTo(end)
       .withIntersectionTraversalCalculator(calculator)
@@ -219,7 +209,7 @@ public class TriangleInequalityTest {
       }
 
       GraphPath<State, Edge, Vertex> startIntermediatePath = getPath(
-        request,
+        streetSearchRequest,
         null,
         start,
         intermediate
@@ -230,7 +220,7 @@ public class TriangleInequalityTest {
 
       Edge back = startIntermediatePath.states.getLast().getBackEdge();
       GraphPath<State, Edge, Vertex> intermediateEndPath = getPath(
-        request,
+        streetSearchRequest,
         back,
         intermediate,
         end

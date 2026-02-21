@@ -12,8 +12,7 @@ import org.locationtech.jts.geom.LineString;
 import org.opentripplanner.astar.model.GraphPath;
 import org.opentripplanner.astar.model.ShortestPathTree;
 import org.opentripplanner.graph_builder.module.TurnRestrictionModule;
-import org.opentripplanner.routing.api.request.RouteRequest;
-import org.opentripplanner.routing.api.request.request.StreetRequest;
+import org.opentripplanner.street.search.request.StreetSearchRequest;
 import org.opentripplanner.service.osminfo.OsmInfoGraphBuildRepository;
 import org.opentripplanner.service.osminfo.internal.DefaultOsmInfoGraphBuildRepository;
 import org.opentripplanner.street.geometry.GeometryUtils;
@@ -42,7 +41,7 @@ public class TurnCostTest {
 
   private Vertex bottomLeft;
 
-  private RouteRequest proto;
+  private StreetSearchRequest proto;
 
   private IntersectionTraversalCalculator calculator;
 
@@ -102,16 +101,13 @@ public class TurnCostTest {
     turnRestrictionModule.buildGraph();
 
     // Make a prototype routing request.
-    proto = RouteRequest.of()
-      .withPreferences(preferences ->
-        preferences
-          .withCar(it -> it.withReluctance(1.0))
-          .withBike(bike -> bike.withSpeed(1.0).withReluctance(1.0))
-          .withScooter(scooter -> scooter.withSpeed(1.0).withReluctance(1.0))
-          .withWalk(walk -> walk.withSpeed(1.0).withStairsReluctance(1.0).withReluctance(1.0))
-          .withStreet(it -> it.withTurnReluctance(1.0))
-      )
-      .buildDefault();
+    proto = StreetSearchRequest.of()
+      .withCar(car -> car.withReluctance(1.0))
+      .withBike(bike -> bike.withSpeed(1.0).withReluctance(1.0))
+      .withScooter(scooter -> scooter.withSpeed(1.0).withReluctance(1.0))
+      .withWalk(walk -> walk.withSpeed(1.0).withStairsReluctance(1.0).withReluctance(1.0))
+      .withTurnReluctance(1.0)
+      .build();
 
     // Turn costs are all 0 by default.
     calculator = new ConstantIntersectionTraversalCalculator(0.0);
@@ -215,16 +211,18 @@ public class TurnCostTest {
   }
 
   private GraphPath<State, Edge, Vertex> checkForwardRouteDuration(
-    RouteRequest request,
+    StreetSearchRequest request,
     StreetMode streetMode,
     Vertex from,
     Vertex to,
     int expectedDuration
   ) {
+    var streetSearchRequest = StreetSearchRequest.copyOf(request)
+      .withMode(streetMode)
+      .build();
     ShortestPathTree<State, Edge, Vertex> tree = StreetSearchBuilder.of()
       .withHeuristic(new EuclideanRemainingWeightHeuristic())
-      .withRequest(request)
-      .withStreetRequest(new StreetRequest(streetMode))
+      .withRequest(streetSearchRequest)
       .withFrom(from)
       .withTo(to)
       .withIntersectionTraversalCalculator(calculator)

@@ -30,8 +30,7 @@ import org.opentripplanner.osm.model.OsmRelation;
 import org.opentripplanner.osm.model.OsmRelationMember;
 import org.opentripplanner.osm.model.TraverseDirection;
 import org.opentripplanner.osm.wayproperty.WayProperties;
-import org.opentripplanner.routing.api.request.RouteRequest;
-import org.opentripplanner.routing.api.request.request.StreetRequest;
+import org.opentripplanner.street.search.request.StreetSearchRequest;
 import org.opentripplanner.service.osminfo.OsmInfoGraphBuildRepository;
 import org.opentripplanner.service.osminfo.model.Platform;
 import org.opentripplanner.street.geometry.GeometryUtils;
@@ -381,15 +380,16 @@ class WalkableAreaBuilder {
       mode = StreetMode.CAR;
     }
     // TODO: This is incorrect, the configured defaults are not used.
-    RouteRequest request = RouteRequest.defaultValue();
+    var streetSearchRequest = StreetSearchRequest.of()
+      .withMode(mode)
+      .build();
     Set<Edge> usedEdges = new HashSet<>();
     for (Vertex vertex : startingVertices) {
       ShortestPathTree<State, Edge, Vertex> spt = StreetSearchBuilder.of()
         .withPreStartHook(OTPRequestTimeoutException::checkForTimeout)
         .withSkipEdgeStrategy(new ListedEdgesOnly(edges))
         .withDominanceFunction(new DominanceFunctions.EarliestArrival())
-        .withRequest(request)
-        .withStreetRequest(new StreetRequest(mode))
+        .withRequest(streetSearchRequest)
         .withFrom(vertex)
         .getShortestPathTree();
 

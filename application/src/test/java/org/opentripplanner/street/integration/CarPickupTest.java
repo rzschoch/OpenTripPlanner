@@ -7,7 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.opentripplanner.routing.algorithm.GraphRoutingTest;
 import org.opentripplanner.routing.api.request.RouteRequest;
-import org.opentripplanner.routing.api.request.request.StreetRequest;
+import org.opentripplanner.streetadapter.StreetSearchRequestMapper;
 import org.opentripplanner.street.model.StreetMode;
 import org.opentripplanner.street.model.StreetTraversalPermission;
 import org.opentripplanner.street.model.vertex.StreetVertex;
@@ -182,10 +182,12 @@ public class CarPickupTest extends GraphRoutingTest {
       .withArriveBy(arriveBy)
       .buildDefault();
 
+    var streetSearchRequest = StreetSearchRequestMapper.mapInternal(request)
+      .withMode(StreetMode.CAR_PICKUP)
+      .build();
     var tree = StreetSearchBuilder.of()
       .withHeuristic(new EuclideanRemainingWeightHeuristic())
-      .withRequest(request)
-      .withStreetRequest(new StreetRequest(StreetMode.CAR_PICKUP))
+      .withRequest(streetSearchRequest)
       .withFrom(fromVertex)
       .withTo(toVertex)
       .getShortestPathTree();

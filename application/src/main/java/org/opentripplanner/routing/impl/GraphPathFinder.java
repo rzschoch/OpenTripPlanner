@@ -12,17 +12,18 @@ import org.opentripplanner.astar.strategy.DurationSkipEdgeStrategy;
 import org.opentripplanner.astar.strategy.PathComparator;
 import org.opentripplanner.framework.application.OTPRequestTimeoutException;
 import org.opentripplanner.routing.api.request.RouteRequest;
-import org.opentripplanner.routing.api.request.preference.StreetPreferences;
 import org.opentripplanner.routing.error.PathNotFoundException;
 import org.opentripplanner.routing.linking.LinkingContext;
 import org.opentripplanner.street.model.StreetConstants;
 import org.opentripplanner.street.model.edge.Edge;
 import org.opentripplanner.street.model.edge.ExtensionRequestContext;
 import org.opentripplanner.street.model.vertex.Vertex;
+import org.opentripplanner.street.search.request.StreetSearchRequest;
 import org.opentripplanner.street.search.state.State;
 import org.opentripplanner.street.search.strategy.DominanceFunctions;
 import org.opentripplanner.streetadapter.EuclideanRemainingWeightHeuristic;
 import org.opentripplanner.streetadapter.StreetSearchBuilder;
+import org.opentripplanner.streetadapter.StreetSearchRequestMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,20 +83,22 @@ public class GraphPathFinder {
     Set<Vertex> from,
     Set<Vertex> to
   ) {
-    StreetPreferences preferences = request.preferences().street();
+    var streetRequest = request.journey().direct();
+    StreetSearchRequest streetSearchRequest = StreetSearchRequestMapper.mapInternal(request)
+      .withMode(streetRequest.mode())
+      .build();
 
     StreetSearchBuilder aStar = StreetSearchBuilder.of()
       .withPreStartHook(OTPRequestTimeoutException::checkForTimeout)
       .withHeuristic(new EuclideanRemainingWeightHeuristic(maxCarSpeed))
       .withSkipEdgeStrategy(
         new DurationSkipEdgeStrategy(
-          preferences.maxDirectDuration().valueOf(request.journey().direct().mode())
+          request.preferences().street().maxDirectDuration().valueOf(streetRequest.mode())
         )
       )
       // FORCING the dominance function to weight only
       .withDominanceFunction(new DominanceFunctions.MinimumWeight())
-      .withRequest(request)
-      .withStreetRequest(request.journey().direct())
+      .withRequest(streetSearchRequest)
       .withFrom(from)
       .withTo(to)
       .withExtensionRequestContexts(extensionRequestContexts);

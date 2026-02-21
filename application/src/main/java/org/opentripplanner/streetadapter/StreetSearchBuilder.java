@@ -7,9 +7,6 @@ import java.util.Set;
 import org.opentripplanner.astar.AStarBuilder;
 import org.opentripplanner.astar.spi.DominanceFunction;
 import org.opentripplanner.astar.spi.RemainingWeightHeuristic;
-import org.opentripplanner.routing.api.request.RouteRequest;
-import org.opentripplanner.routing.api.request.preference.StreetPreferences;
-import org.opentripplanner.routing.api.request.request.StreetRequest;
 import org.opentripplanner.street.model.edge.Edge;
 import org.opentripplanner.street.model.edge.ExtensionRequestContext;
 import org.opentripplanner.street.model.vertex.Vertex;
@@ -20,8 +17,7 @@ import org.opentripplanner.street.search.strategy.DominanceFunctions;
 
 public class StreetSearchBuilder extends AStarBuilder<State, Edge, Vertex, StreetSearchBuilder> {
 
-  private RouteRequest routeRequest;
-  private StreetRequest streetRequest = StreetRequest.DEFAULT;
+  private StreetSearchRequest streetSearchRequest;
   private IntersectionTraversalCalculator intersectionTraversalCalculator;
   private List<ExtensionRequestContext> extensionRequestContexts = List.of();
 
@@ -34,14 +30,9 @@ public class StreetSearchBuilder extends AStarBuilder<State, Edge, Vertex, Stree
     setBuilder(this);
   }
 
-  public StreetSearchBuilder withRequest(RouteRequest request) {
-    this.routeRequest = request;
+  public StreetSearchBuilder withRequest(StreetSearchRequest request) {
+    this.streetSearchRequest = request;
     withArriveBy(request.arriveBy());
-    return this;
-  }
-
-  public StreetSearchBuilder withStreetRequest(StreetRequest streetRequest) {
-    this.streetRequest = streetRequest;
     return this;
   }
 
@@ -61,26 +52,20 @@ public class StreetSearchBuilder extends AStarBuilder<State, Edge, Vertex, Stree
 
   @Override
   protected Duration streetRoutingTimeout() {
-    return routeRequest.preferences().street().routingTimeout();
+    return streetSearchRequest.routingTimeout();
   }
 
   @Override
   protected Collection<State> createInitialStates(Set<Vertex> originVertices) {
-    StreetSearchRequest streetSearchRequest = StreetSearchRequestMapper.mapInternal(routeRequest)
-      .withMode(streetRequest.mode())
-      .withArriveBy(arriveBy())
-      .build();
-
     return State.getInitialStates(originVertices, streetSearchRequest);
   }
 
   @Override
   protected void prepareInitialStates(Collection<State> initialStates) {
     if (intersectionTraversalCalculator == null) {
-      final StreetPreferences streetPreferences = routeRequest.preferences().street();
       intersectionTraversalCalculator = IntersectionTraversalCalculator.create(
-        streetPreferences.intersectionTraversalModel(),
-        streetPreferences.drivingDirection()
+        streetSearchRequest.intersectionTraversalModel(),
+        streetSearchRequest.drivingDirection()
       );
     }
 
@@ -101,10 +86,10 @@ public class StreetSearchBuilder extends AStarBuilder<State, Edge, Vertex, Stree
       // No initialization needed
     } else if (heuristic instanceof EuclideanRemainingWeightHeuristic euclideanHeuristic) {
       euclideanHeuristic.initialize(
-        streetRequest.mode(),
+        streetSearchRequest.mode(),
         destination,
         arriveBy,
-        routeRequest.preferences()
+        streetSearchRequest
       );
     } else {
       throw new IllegalArgumentException("Unknown heuristic type: " + heuristic);

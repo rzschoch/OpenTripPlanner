@@ -35,6 +35,7 @@ import org.opentripplanner.street.search.TraverseMode;
 import org.opentripplanner.street.search.state.State;
 import org.opentripplanner.street.search.strategy.DominanceFunctions;
 import org.opentripplanner.streetadapter.StreetSearchBuilder;
+import org.opentripplanner.streetadapter.StreetSearchRequestMapper;
 import org.opentripplanner.transit.model.site.AreaStop;
 
 public class StreetNearbyStopFinder implements NearbyStopFinder {
@@ -125,13 +126,16 @@ public class StreetNearbyStopFinder implements NearbyStopFinder {
     }
     stopsFound = new ArrayList<>(stopsFound);
 
+    var streetSearchRequest = StreetSearchRequestMapper.mapInternal(request)
+      .withMode(streetRequest.mode())
+      .withArriveBy(reverseDirection)
+      .build();
+
     var streetSearch = StreetSearchBuilder.of()
       .withPreStartHook(OTPRequestTimeoutException::checkForTimeout)
       .withSkipEdgeStrategy(new DurationSkipEdgeStrategy<>(durationLimit))
       .withDominanceFunction(new DominanceFunctions.MinimumWeight())
-      .withRequest(request)
-      .withArriveBy(reverseDirection)
-      .withStreetRequest(streetRequest)
+      .withRequest(streetSearchRequest)
       .withFrom(reverseDirection ? null : originVertices)
       .withTo(reverseDirection ? originVertices : null)
       .withExtensionRequestContexts(extensionRequestContexts);

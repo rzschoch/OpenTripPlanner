@@ -2,6 +2,7 @@ package org.opentripplanner.street.search.request;
 
 import static java.util.Objects.requireNonNull;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -13,7 +14,9 @@ import org.opentripplanner.street.model.StreetMode;
 import org.opentripplanner.street.model.edge.ExtensionRequestContext;
 import org.opentripplanner.street.model.vertex.Vertex;
 import org.opentripplanner.street.search.TraverseMode;
+import org.opentripplanner.street.search.intersection_model.DrivingDirection;
 import org.opentripplanner.street.search.intersection_model.IntersectionTraversalCalculator;
+import org.opentripplanner.street.search.intersection_model.IntersectionTraversalModel;
 import org.opentripplanner.street.search.state.State;
 import org.opentripplanner.street.search.strategy.DominanceFunctions;
 import org.opentripplanner.utils.time.TimeUtils;
@@ -51,6 +54,9 @@ public class StreetSearchRequest implements AStarRequest {
   private final CarRequest car;
   private final WheelchairRequest wheelchairRequest;
   private final ElevatorRequest elevator;
+  private final Duration routingTimeout;
+  private final IntersectionTraversalModel intersectionTraversalModel;
+  private final DrivingDirection drivingDirection;
 
   private IntersectionTraversalCalculator intersectionTraversalCalculator =
     IntersectionTraversalCalculator.DEFAULT;
@@ -79,6 +85,9 @@ public class StreetSearchRequest implements AStarRequest {
     this.wheelchairRequest = WheelchairRequest.DEFAULT;
     this.elevator = ElevatorRequest.DEFAULT;
     this.rentalPeriod = null;
+    this.routingTimeout = Duration.ofSeconds(5);
+    this.intersectionTraversalModel = IntersectionTraversalModel.SIMPLE;
+    this.drivingDirection = DrivingDirection.RIGHT;
   }
 
   StreetSearchRequest(StreetSearchRequestBuilder builder) {
@@ -97,6 +106,9 @@ public class StreetSearchRequest implements AStarRequest {
     this.wheelchairRequest = requireNonNull(builder.wheelchair);
     this.elevator = requireNonNull(builder.elevator);
     this.rentalPeriod = builder.rentalPeriod;
+    this.routingTimeout = requireNonNull(builder.routingTimeout);
+    this.intersectionTraversalModel = requireNonNull(builder.intersectionTraversalModel);
+    this.drivingDirection = requireNonNull(builder.drivingDirection);
   }
 
   public static StreetSearchRequestBuilder of() {
@@ -252,6 +264,25 @@ public class StreetSearchRequest implements AStarRequest {
 
   public ElevatorRequest elevator() {
     return elevator;
+  }
+
+  /**
+   * The preferred way to limit the search is to limit the distance for each street mode(WALK, BIKE,
+   * CAR). So the default timeout for a street search is set quite high. This is used to abort the
+   * search if the max distance is not reached within the timeout.
+   */
+  public Duration routingTimeout() {
+    return routingTimeout;
+  }
+
+  /** This is the model that computes the costs of turns. */
+  public IntersectionTraversalModel intersectionTraversalModel() {
+    return intersectionTraversalModel;
+  }
+
+  /** The driving direction to use in the intersection traversal calculation */
+  public DrivingDirection drivingDirection() {
+    return drivingDirection;
   }
 
   /**

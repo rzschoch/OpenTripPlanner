@@ -7,8 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.opentripplanner.astar.model.GraphPath;
 import org.opentripplanner.astar.model.ShortestPathTree;
 import org.opentripplanner.osm.DefaultOsmProvider;
-import org.opentripplanner.routing.api.request.RouteRequest;
-import org.opentripplanner.routing.api.request.request.StreetRequest;
+import org.opentripplanner.street.search.request.StreetSearchRequest;
 import org.opentripplanner.street.graph.Graph;
 import org.opentripplanner.street.model.StreetMode;
 import org.opentripplanner.street.model.edge.Edge;
@@ -52,16 +51,15 @@ class UnroutableTest {
    */
   @Test
   public void testOnBoardRouting() {
-    var request = RouteRequest.of()
-      .withJourney(j -> j.withDirect(new StreetRequest(StreetMode.BIKE)))
-      .buildDefault();
+    var streetSearchRequest = StreetSearchRequest.of()
+      .withMode(StreetMode.BIKE)
+      .build();
 
     Vertex from = graph.getVertex(VertexLabel.osm(2003617278));
     Vertex to = graph.getVertex(VertexLabel.osm(40446276));
     ShortestPathTree<State, Edge, Vertex> spt = StreetSearchBuilder.of()
       .withHeuristic(new EuclideanRemainingWeightHeuristic())
-      .withRequest(request)
-      .withStreetRequest(request.journey().direct())
+      .withRequest(streetSearchRequest)
       .withFrom(from)
       .withTo(to)
       .getShortestPathTree();

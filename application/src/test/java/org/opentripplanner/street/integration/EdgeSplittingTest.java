@@ -188,12 +188,11 @@ public class EdgeSplittingTest {
 
     assertEquals(3, edges.size());
 
-    var request = RouteRequest.defaultValue();
+    var streetSearchRequest = StreetSearchRequest.of().build();
 
     ShortestPathTree<State, Edge, Vertex> spt = StreetSearchBuilder.of()
       .withHeuristic(new EuclideanRemainingWeightHeuristic())
-      .withRequest(request)
-      .withStreetRequest(request.journey().direct())
+      .withRequest(streetSearchRequest)
       .withFrom(start)
       .withTo(end)
       .getShortestPathTree();
@@ -232,12 +231,11 @@ public class EdgeSplittingTest {
     Collection<Edge> edges = end.getIncoming();
     assertEquals(1, edges.size());
 
-    var request = RouteRequest.defaultValue();
+    var streetSearchRequest = StreetSearchRequest.of().build();
 
     ShortestPathTree<State, Edge, Vertex> spt = StreetSearchBuilder.of()
       .withHeuristic(new EuclideanRemainingWeightHeuristic())
-      .withRequest(request)
-      .withStreetRequest(request.journey().direct())
+      .withRequest(streetSearchRequest)
       .withFrom(start)
       .withTo(end)
       .getShortestPathTree();
@@ -346,9 +344,10 @@ public class EdgeSplittingTest {
       assertFalse(fromVertices.isEmpty());
       var toVertices = linkingContext.findVertices(to);
       assertFalse(toVertices.isEmpty());
+      var walkingStreetSearchRequest = StreetSearchRequest.of().build();
       ShortestPathTree<State, Edge, Vertex> spt = StreetSearchBuilder.of()
         .withHeuristic(new EuclideanRemainingWeightHeuristic())
-        .withRequest(walking)
+        .withRequest(walkingStreetSearchRequest)
         .withFrom(fromVertices)
         .withTo(toVertices)
         .getShortestPathTree();

@@ -2,6 +2,7 @@ package org.opentripplanner.street.search.request;
 
 import static org.opentripplanner.street.search.request.StreetSearchRequest.MAX_CLOSENESS_METERS;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
@@ -9,6 +10,8 @@ import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Envelope;
 import org.opentripplanner.street.geometry.SphericalDistanceLibrary;
 import org.opentripplanner.street.model.StreetMode;
+import org.opentripplanner.street.search.intersection_model.DrivingDirection;
+import org.opentripplanner.street.search.intersection_model.IntersectionTraversalModel;
 
 public class StreetSearchRequestBuilder {
 
@@ -26,6 +29,9 @@ public class StreetSearchRequestBuilder {
   WheelchairRequest wheelchair;
   ScooterRequest scooter;
   ElevatorRequest elevator;
+  Duration routingTimeout;
+  IntersectionTraversalModel intersectionTraversalModel;
+  DrivingDirection drivingDirection;
 
   @Nullable
   RentalPeriod rentalPeriod;
@@ -46,6 +52,9 @@ public class StreetSearchRequestBuilder {
     this.wheelchair = original.wheelchair();
     this.elevator = original.elevator();
     this.rentalPeriod = original.rentalPeriod();
+    this.routingTimeout = original.routingTimeout();
+    this.intersectionTraversalModel = original.intersectionTraversalModel();
+    this.drivingDirection = original.drivingDirection();
   }
 
   public StreetSearchRequestBuilder withStartTime(Instant startTime) {
@@ -127,6 +136,23 @@ public class StreetSearchRequestBuilder {
 
   public StreetSearchRequestBuilder withRentalPeriod(RentalPeriod rentalPeriod) {
     this.rentalPeriod = rentalPeriod;
+    return this;
+  }
+
+  public StreetSearchRequestBuilder withRoutingTimeout(Duration routingTimeout) {
+    this.routingTimeout = routingTimeout;
+    return this;
+  }
+
+  public StreetSearchRequestBuilder withIntersectionTraversalModel(
+    IntersectionTraversalModel intersectionTraversalModel
+  ) {
+    this.intersectionTraversalModel = intersectionTraversalModel;
+    return this;
+  }
+
+  public StreetSearchRequestBuilder withDrivingDirection(DrivingDirection drivingDirection) {
+    this.drivingDirection = drivingDirection;
     return this;
   }
 

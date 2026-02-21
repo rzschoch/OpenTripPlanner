@@ -8,7 +8,6 @@ import org.opentripplanner.astar.strategy.PathComparator;
 import org.opentripplanner.core.model.i18n.NonLocalizedString;
 import org.opentripplanner.model.GenericLocation;
 import org.opentripplanner.routing.api.request.RouteRequest;
-import org.opentripplanner.routing.api.request.request.StreetRequest;
 import org.opentripplanner.routing.linking.LinkingContext;
 import org.opentripplanner.routing.linking.TemporaryVerticesContainer;
 import org.opentripplanner.routing.linking.VertexLinker;
@@ -22,10 +21,12 @@ import org.opentripplanner.street.model.vertex.Vertex;
 import org.opentripplanner.street.search.TraverseMode;
 import org.opentripplanner.street.search.TraverseModeSet;
 import org.opentripplanner.street.search.state.State;
+import org.opentripplanner.street.search.request.StreetSearchRequest;
 import org.opentripplanner.street.search.strategy.DominanceFunctions;
 import org.opentripplanner.street.service.StreetLimitationParametersService;
 import org.opentripplanner.streetadapter.EuclideanRemainingWeightHeuristic;
 import org.opentripplanner.streetadapter.StreetSearchBuilder;
+import org.opentripplanner.streetadapter.StreetSearchRequestMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,7 +98,7 @@ public class CarpoolStreetRouter {
       var toVertices = getOrCreateVertices(to, linkingContext);
 
       return carpoolRouting(
-        new StreetRequest(StreetMode.CAR),
+        StreetMode.CAR,
         fromVertices,
         toVertices,
         streetLimitationParametersService.maxCarSpeed()
@@ -177,21 +178,24 @@ public class CarpoolStreetRouter {
    * @return the first (best) path found, or null if no paths exist
    */
   private GraphPath<State, Edge, Vertex> carpoolRouting(
-    StreetRequest streetRequest,
+    StreetMode streetMode,
     Set<Vertex> fromVertices,
     Set<Vertex> toVertices,
     float maxCarSpeed
   ) {
     var preferences = request.preferences().street();
 
+    StreetSearchRequest streetSearchRequest = StreetSearchRequestMapper.mapInternal(request)
+      .withMode(streetMode)
+      .build();
+
     var streetSearch = StreetSearchBuilder.of()
       .withHeuristic(new EuclideanRemainingWeightHeuristic(maxCarSpeed))
       .withSkipEdgeStrategy(
-        new DurationSkipEdgeStrategy(preferences.maxDirectDuration().valueOf(streetRequest.mode()))
+        new DurationSkipEdgeStrategy(preferences.maxDirectDuration().valueOf(streetMode))
       )
       .withDominanceFunction(new DominanceFunctions.MinimumWeight())
-      .withRequest(request)
-      .withStreetRequest(streetRequest)
+      .withRequest(streetSearchRequest)
       .withFrom(fromVertices)
       .withTo(toVertices);
 
